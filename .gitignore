@@ -1,0 +1,9 @@
+# this file lists all directories/files, that are ignored by git
+
+__pycache__
+plots
+data
+*.pdf
+*.png
+todo.txt
+
