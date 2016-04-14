@@ -41,9 +41,20 @@ def coordinate_trafo(r_star, theta_star, phi_star, plan_loc_x=params['planet_loc
     returns: r_pl, theta_pl, phi_pl
     """
     # computing the cartesian coordinates in the star coordinate system
-    x_star = r_star*__np__.sin(theta_star)*__np__.cos(phi_star)
-    y_star = r_star*__np__.sin(theta_star)*__np__.sin(phi_star)
-    z_star = r_star*__np__.cos(phi_star)
+    x_star = []
+    y_star = []
+    z_star = []
+
+    for i in r_star:
+        for j in theta_star:
+            for k in phi_star:
+                x_star.append(i*__np__.sin(j)*__np__.cos(k))
+                y_star.append(i*__np__.sin(j)*__np__.sin(k))
+                z_star.append(i*__np__.cos(j))
+
+    x_star = __np__.array(x_star)
+    y_star = __np__.array(y_star)
+    z_star = __np__.array(z_star)
 
     # cartesian coordinates in the planet coordinate system
     x_plan = x_star - plan_loc_x
@@ -65,6 +76,15 @@ def velocity_trafo(vr_star, vtheta_star, vphi_star, r_star, theta_star, phi_star
 
     returns: vr_plan, vtheta_plan, vphi_plan
     """
+    coords = []
+    for i in r_star:
+        for j in theta_star:
+            for k in phi_star:
+                coords.append([i,j,k])
+
+    coords = __np__.array(coords).T  # first entry are radii, second theta, third phi
+    r_star, theta_star, phi_star = coords
+
     # transforming the velocities in the star-centered coordinate system into cartesian coordinates x,y,z
     x_dot_star = (vr_star*__np__.sin(theta_star)*__np__.cos(phi_star) +
                   vtheta_star*__np__.cos(theta_star)*__np__.cos(phi_star) -
@@ -99,7 +119,7 @@ def extract_shell(vr, vtheta, vphi, r_pl, shell=params['r_hill'], delta=params['
     returns: vr, vtheta, vphi (extracted)
     """
     # NOTE: find a good value for delta, so that the plots are looking nice
-    indices = [i for i,j in enumerate(r_pl) if ((shell + delta*box) > j and j > (shell- delta*box))]
+    indices = [i for i,j in enumerate(r_pl) if ((shell + delta*box) > j > (shell- delta*box))]
     print('\n:: Shell Extractor:\n:: Number of Values in shell:', len(indices), '\n')
 
     return __np__.array([vr[indices], vtheta[indices], vphi[indices]]), indices
