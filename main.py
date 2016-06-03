@@ -26,10 +26,10 @@ params = dict(r_hill=16685629566.462387, delta=0.1, box=1.4e9, r0_planet=2*6.371
 
 
 def timestamp():
-        """
-        returns: a string of the current time in the format YYYY-MM-DD_HH:MM:SS
-        """
-        return str(__dt__.datetime.now()).split(sep='.')[0].replace(' ', '_')  # timestamp
+    """
+    returns: a string of the current time in the format YYYY-MM-DD_HH:MM:SS
+    """
+    return str(__dt__.datetime.now()).split(sep='.')[0].replace(' ', '_')  # timestamp
 
 
 def coordinate_trafo(r_star, theta_star, phi_star, plan_loc_x=params['planet_location_x']):
@@ -180,7 +180,6 @@ def contour_plot_velocity(x, y, vr, num_levels=15, levels=[], colorbar=True, fig
 
     return fig, ax, cax
 
-
 def scatter_contour(x, quantity, x_norm=params['r0_planet'], nbins=80, num_levels=15, levels=[],
                     colorbar=True, figsize=(12,9), xlog=True):
     """
@@ -234,3 +233,6 @@ def scatter_contour(x, quantity, x_norm=params['r0_planet'], nbins=80, num_level
     cb.set_label('$Dot\ Density$')
 
     return fig, ax, cax
+
+##########
+## Still to add: vector ploti, streamline plo 

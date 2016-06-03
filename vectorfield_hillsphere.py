@@ -1,11 +1,11 @@
-# this testscript is used to slice the data around the planet
+# this script is used to slice the data around the planet
 # to achive this, the cartesian coordinate data is used
 
 import main
 import numpy as __np__
 import matplotlib.pyplot as __plt__
 
-# data
+# data 
 print('\n:: Loading Data...\n')
 vr, vtheta, vphi = __np__.loadtxt('data/prepared/VEL_PL', skiprows=1, unpack=True)  # velocities
 r, theta, phi = __np__.loadtxt('data/prepared/SPH_COOR_PL.txt', skiprows=1, unpack=True)  # spherical coordinates
