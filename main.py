@@ -233,6 +233,3 @@ def scatter_contour(x, quantity, x_norm=params['r0_planet'], nbins=80, num_level
     cb.set_label('$Dot\ Density$')
 
     return fig, ax, cax
-
-##########
-## Still to add: vector ploti, streamline plo 
