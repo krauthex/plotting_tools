@@ -4,7 +4,7 @@
 # imports
 import numpy as __np__
 import matplotlib.pyplot as __plt__
-import matplotlib.mlab as __mlab__
+# import matplotlib.mlab as __mlab__
 from scipy.interpolate import interp1d as __interp1d__  # used in FindCellDensity function
 
 def BaseGrid2D(xdata, ydata, ncells=50):
@@ -79,6 +79,11 @@ def FindMinVals(vals, quantity, offset=0, absolute=False):
 #       * Method B: sort values along x (or y) axis. use FindMinVals to find e.g. the 100 smallest values. filter out all values who's y (or x) value is too far away from the grid point. If the amount of filtered values is too low, rerun the FindMinVals function with a higher quantity.
 #       * Method C: calculate r_ij = sqrt((x_data-i)^2 + (y_data-j)^2) and (merge)sort the r_ij values via FindMinVals. use e.g. the smallest 100 values (or up to a certain maximal radius).
 
+# a class for raising errors
+class ShapeMismatchError(Exception):
+    def __init__(self, msg):
+    self.message = msg
+
 # Method A
 def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
     """
@@ -111,7 +116,7 @@ def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
         value_block.append(data[1, lBound:uBound])
 
     for i,j in enumerate(value_block):
-        if(len(j)):
+        if(len(j) > interpol_threshold):
             means.append(__np__.mean(j))
             uncerts.append(__np__.std(j)/__np__.sqrt(len(j)))  # calculating the uncertainty of the mean value
 
@@ -123,36 +128,71 @@ def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
     emptyCellsShifted = __np__.roll(emptyCells, -1)
     diff = np.abs(emptyCells-emptyCellsShifted)
 
+    # EdgeStretch !
+    # expand the first value found next to the empty cells at the edges of the grid to all the empty edge cells
+    # [][][][2][...] ---> [2][2][2][2][...]
+    # 'left' side:
+    if(emptyCells[0] == 0):
+        emptyCellCounter = 1
+        while(diff[emptyCellCounter-1] == 1):
+            emptyCellCounter += 1
 
-    #emptyCellPairCounter = 1
+        emptyCells = emptyCells[emptyCellCounter:]  # shorten the list of empty cells on left edge
+        MeanToExpand = means[0]
+        UncertToExpand = uncerts[0]
+        mean_to_add_left = []  # maybe exchange this part by : __np__.empty(emptyCellCounter); array.fill(MeanToExpand); and typecast the outcome to list
+        uncert_to_add_left = []
+        for i in range(emptyCellCounter):
+            mean_to_add_left.append(MeanToExpand)
+            uncert_to_add_left.append(UncertToExpand)
+        means = mean_to_add_left + means
+        uncerts = uncert_to_add_left + uncerts
+
+    # 'right' side
+    if(emptyCells[-1] == (len(value_block)-1)):
+        rightDiff = __np__.abs(emptyCells-__np__.roll(emptyCells, 1))
+        emptyCellCounter = 1
+        while(rightDiff[-emptyCellCounter] == 1):
+            emptyCellCounter += 1
+
+        emptyCells = emptyCells[:-emptyCellCounter]  # shorten the list of empty cells on right edge
+        MeanToExpand = means[-1]
+        UncertToExpand = uncerts[-1]
+        mean_to_add_right = []
+        uncert_to_add_right = []
+        for i in range(emptyCellCounter):
+            mean_to_add_right.append(MeanToExpand)
+            uncert_to_add_right.append(UncertToExpand)
+        means = means+mean_to_add_right
+        uncerts = uncerts+uncert_to_add_right
+
+    # recalculate the 'diff' array:
+    emptyCellsShifted = __np__.roll(emptyCells, -1)
+    diff = np.abs(emptyCells-emptyCellsShifted)
+
+    # Linear interpolation of empty cells between filled cells.
+    # emptyCellPairCounter = 1
     for i,j in enumerate(diff):
-        if(emptyCells[0] > 0):  # ignoring the edge cases here, they'll be taken care of later
-            if(j == 1):
-                emptyCellPairCounter = 1
+        if(j == 1):
+            emptyCellPairCounter = 1
 
-                    while(diff[i+emptyCellPairCounter] == 1 and ):  # if there are more than one empty cells in a row, increase the counter
-                        emptyCellPairCounter = emptyCellPairCounter + 1
+            while(diff[i+emptyCellPairCounter] == 1 and ):  # if there are more than one empty cells in a row, increase the counter
+                emptyCellPairCounter = emptyCellPairCounter + 1
 
-                    # interp1d is piecewise linear
-                    LinInt = __interp1d__([vals_index[k] for k in [i, i+emptyCellPairCounter]], [means[l] for l in [i-1, i]])  # interpolation between the known values
-                    for k in emptyCells[i:i+emptyCellPairCounter+1]:
-                        means.insert(k, LinInt(vals_index[k]))
-                        uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]))
+            # interp1d is piecewise linear
+            LinInt = __interp1d__([vals_index[k] for k in [i, i+emptyCellPairCounter]], [means[l] for l in [i-1, i]])  # linear interpolation between the known values
+            for k in emptyCells[i:i+emptyCellPairCounter+1]:
+                means.insert(k, LinInt(vals_index[k]))
+                uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]))
 
-                    ## NOTE: Problem here is, that, if the first cell in emptyCells is the first cell in a row/column, the loop above will start running at the second entry in the list (if it's empty of course). So I still have to find a way to fill the first few and last few empty cells before trying to interpolate the missing ones. (which would then kind of make the extrapolation obsolete) 
-                    ## NOTE: still to do: extrapolation at the edges
+        else:
+            LinInt = __interp1d__([vals_index[k] for k in [i, i+1]], [means[l] for l in [i-1, i]])
+            means.insert(i, LintInt(vals_index[i])
+            uncerts.insert(i, __np__.mean([uncerts[l] for l in [k-1, k]))
+    # sanity checks:
+    if(len(means) != len(value_index):
+        raise ShapeMismatchError("Number of mean values and value indices is not the same!")
 
     gridded_data = __np__.array([vals_index, means, uncerts])
 
-# def NearestDataPoints2D(data, xgrid, ygrid, Ndata):
-#     """
-#     This function takes a 2-dim data array, array([xdata, ydata]), and two 1-dim grid-coordinate-lists to map the data on. The nearest data point for a grid intersection point is found via the FindMinVals function and referencing the corresponding indices to the x,y data value pairs. Ndata is the amount of values that should be in the new gridcell.
-#     """
-#
-#     #xdata, ydata = data  # extracting the x and y arrays
-#     #sorted_data = __np__.sort(data, axis=0, kind='mergesort')  # sorting the data along the x-axis
-#
-#     # iterating over the grid lists:
-#     for i in xgrid:
-#         for j in ygrid:
-#             nearest_points = FindMinVals(data[0], )
+    return gridded_data
