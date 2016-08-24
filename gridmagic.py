@@ -82,7 +82,7 @@ def FindMinVals(vals, quantity, offset=0, absolute=False):
 # a class for raising errors
 class ShapeMismatchError(Exception):
     def __init__(self, msg):
-    self.message = msg
+        self.message = msg
 
 # Method A
 def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
@@ -176,21 +176,21 @@ def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
         if(j == 1):
             emptyCellPairCounter = 1
 
-            while(diff[i+emptyCellPairCounter] == 1 and ):  # if there are more than one empty cells in a row, increase the counter
+            while(diff[i+emptyCellPairCounter] == 1):  # if there are more than one empty cells in a row, increase the counter
                 emptyCellPairCounter = emptyCellPairCounter + 1
 
             # interp1d is piecewise linear
             LinInt = __interp1d__([vals_index[k] for k in [i, i+emptyCellPairCounter]], [means[l] for l in [i-1, i]])  # linear interpolation between the known values
             for k in emptyCells[i:i+emptyCellPairCounter+1]:
                 means.insert(k, LinInt(vals_index[k]))
-                uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]))
+                uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]]))
 
         else:
             LinInt = __interp1d__([vals_index[k] for k in [i, i+1]], [means[l] for l in [i-1, i]])
-            means.insert(i, LintInt(vals_index[i])
-            uncerts.insert(i, __np__.mean([uncerts[l] for l in [k-1, k]))
+            means.insert(i, LintInt(vals_index[i]))
+            uncerts.insert(i, __np__.mean([uncerts[l] for l in [k-1, k]]))
     # sanity checks:
-    if(len(means) != len(value_index):
+    if(len(means) != len(value_index)):
         raise ShapeMismatchError("Number of mean values and value indices is not the same!")
 
     gridded_data = __np__.array([vals_index, means, uncerts])
