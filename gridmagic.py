@@ -177,6 +177,7 @@ def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
             emptyCellPairCounter = 1
 
             while(diff[i+emptyCellPairCounter] == 1):  # if there are more than one empty cells in a row, increase the counter
+
                 emptyCellPairCounter = emptyCellPairCounter + 1
 
             # interp1d is piecewise linear
