@@ -85,18 +85,26 @@ class ShapeMismatchError(Exception):
         self.message = msg
 
 # Method A
-def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
+def FindCellDensity(data, ncells, grid_min=None, grid_max=None, sort_column=0, interpol_threshold=0):
     """
-    This function takes a 2xN-dim data-array ([[coordinates], [values]]) and splits the data in (ncells-1) cells, after sorting them along the sort_axis. Then the mean value for each cell is calculated. If a cell contains less values than the interpolation threshold (interpol_threshold), the value for that cell is interpolated (or extrapolated, if there are no following cells that contain a value).
+    This function takes a 2xN-dim np-data-array ([[coordinates], [values]]) and splits the data in (ncells-1) cells, after sorting them along the sort_axis. Then the mean value for each cell is calculated. If a cell contains less values than the interpolation threshold (interpol_threshold), the value for that cell is interpolated or if there are empty cells at the edges, they're streched (copied from the first neighbouring cell with a value).
 
-    Returns: (sorted) array of the calculated mean values and the interpolation function (or parameters?)
+    Returns: (sorted) array of the calculated mean values and uncertainties of these mean values with corresponding evenly spaced grid indices.
     """
-    data = __np__.sort(data, axis=sort_axis, kind='mergesort')  # sorting the data
+    # input check
+    if(data.shape[1] != 2):
+        data = data.T
+        if(data.shape[1] != 2):
+            raise ShapeMismatchError("Input Data Array has wrong shape!")
+
+    data = data[data[:, sort_column].argsort()]  # sorting the data
+    data = data.T
 
     # grid
-    bounds = [__np__.min(data), __np__.max(data)]  # lower and upper limit for the x axis of the grid
-    grid_index = __np__.linspace(*bounds, num=ncells)  # create the x grid indices
-    vals_index = (grid_index[1:]+grid_index[:-1])/2  # intermediate values between two grid indices as data value indices.
+    if not (grid_min and grid_max):
+        bounds = [data[sort_column,0], data[sort_column,-1]]  # lower and upper limit for the x axis of the grid
+        grid_index = __np__.linspace(*bounds, num=ncells)  # create the x grid indices
+        vals_index = (grid_index[1:]+grid_index[:-1])/2  # intermediate values between two grid indices as data value indices.
 
     # initalize empty lists
     coordinate_block = []
@@ -123,76 +131,90 @@ def FindCellDensity(data, ncells, sort_axis=0, interpol_threshold=0):
         else:
             emptyCells.append(i)  # appending the indices of empty cells to the list emptyCells
 
-    # finding the indices, where two or more empty cells are next to each other by shifting the array by 1 and subtracting it from the original one. positions where empty cells are next to each other just differ by 1.
-    emptyCells = __np__.array(emptyCells)
-    emptyCellsShifted = __np__.roll(emptyCells, -1)
-    diff = np.abs(emptyCells-emptyCellsShifted)
+    if(len(emptyCells)):
+        print(":: Empty cells:\n", emptyCells)
+        # finding the indices, where two or more empty cells are next to each other by shifting the array by 1 and subtracting it from the original one. positions where empty cells are next to each other just differ by 1.
+        emptyCells = __np__.array(emptyCells)
+        emptyCellsShifted = __np__.roll(emptyCells, -1)
+        diff = __np__.abs(emptyCells-emptyCellsShifted)
 
-    # EdgeStretch !
-    # expand the first value found next to the empty cells at the edges of the grid to all the empty edge cells
-    # [][][][2][...] ---> [2][2][2][2][...]
-    # 'left' side:
-    if(emptyCells[0] == 0):
-        emptyCellCounter = 1
-        while(diff[emptyCellCounter-1] == 1):
-            emptyCellCounter += 1
+        # EdgeStretch !
+        # expand the first value found next to the empty cells at the edges of the grid to all the empty edge cells
+        # [][][][2][...] ---> [2][2][2][2][...]
+        # 'left' side:
+        if(emptyCells[0] == 0):
+            emptyCellCounter = 1
+            while(diff[emptyCellCounter-1] == 1):
+                emptyCellCounter += 1
 
-        emptyCells = emptyCells[emptyCellCounter:]  # shorten the list of empty cells on left edge
-        MeanToExpand = means[0]
-        UncertToExpand = uncerts[0]
-        mean_to_add_left = []  # maybe exchange this part by : __np__.empty(emptyCellCounter); array.fill(MeanToExpand); and typecast the outcome to list
-        uncert_to_add_left = []
-        for i in range(emptyCellCounter):
-            mean_to_add_left.append(MeanToExpand)
-            uncert_to_add_left.append(UncertToExpand)
-        means = mean_to_add_left + means
-        uncerts = uncert_to_add_left + uncerts
+            emptyCells = emptyCells[emptyCellCounter:]  # shorten the list of empty cells on left edge
+            MeanToExpand = means[0]
+            UncertToExpand = uncerts[0]
+            mean_to_add_left = []  # maybe exchange this part by : __np__.empty(emptyCellCounter); array.fill(MeanToExpand); and typecast the outcome to list
+            uncert_to_add_left = []
+            for i in range(emptyCellCounter):
+                mean_to_add_left.append(MeanToExpand)
+                uncert_to_add_left.append(UncertToExpand)
+            means = mean_to_add_left + means
+            uncerts = uncert_to_add_left + uncerts
 
-    # 'right' side
-    if(emptyCells[-1] == (len(value_block)-1)):
-        rightDiff = __np__.abs(emptyCells-__np__.roll(emptyCells, 1))
-        emptyCellCounter = 1
-        while(rightDiff[-emptyCellCounter] == 1):
-            emptyCellCounter += 1
+        # 'right' side
+        if(emptyCells[-1] == (len(value_block)-1)):
+            rightDiff = __np__.abs(emptyCells-__np__.roll(emptyCells, 1))
+            emptyCellCounter = 1
+            while(rightDiff[-emptyCellCounter] == 1):
+                emptyCellCounter += 1
 
-        emptyCells = emptyCells[:-emptyCellCounter]  # shorten the list of empty cells on right edge
-        MeanToExpand = means[-1]
-        UncertToExpand = uncerts[-1]
-        mean_to_add_right = []
-        uncert_to_add_right = []
-        for i in range(emptyCellCounter):
-            mean_to_add_right.append(MeanToExpand)
-            uncert_to_add_right.append(UncertToExpand)
-        means = means+mean_to_add_right
-        uncerts = uncerts+uncert_to_add_right
+            emptyCells = emptyCells[:-emptyCellCounter]  # shorten the list of empty cells on right edge
+            MeanToExpand = means[-1]
+            UncertToExpand = uncerts[-1]
+            mean_to_add_right = []
+            uncert_to_add_right = []
+            for i in range(emptyCellCounter):
+                mean_to_add_right.append(MeanToExpand)
+                uncert_to_add_right.append(UncertToExpand)
+            means = means+mean_to_add_right
+            uncerts = uncerts+uncert_to_add_right
 
-    # recalculate the 'diff' array:
-    emptyCellsShifted = __np__.roll(emptyCells, -1)
-    diff = np.abs(emptyCells-emptyCellsShifted)
+        # recalculate the 'diff' array:
+        emptyCellsShifted = __np__.roll(emptyCells, -1)
+        diff = __np__.abs(emptyCells-emptyCellsShifted)
 
-    # Linear interpolation of empty cells between filled cells.
-    # emptyCellPairCounter = 1
-    for i,j in enumerate(diff):
-        if(j == 1):
-            emptyCellPairCounter = 1
+        # Linear interpolation of empty cells between filled cells.
+        emptyCellPairCounter = 0
+        for i,j in enumerate(diff):
+            # heres a problem! even if the counter is increased, the same procedure is done for the next pair i,j.
+            # NOTE: the multiple interpolation problem should be fixed. only problem now is, that after a sequence of 1's in diff, the interpolation is made for all the cells that are marked by a 1, but the following cell (in diff) is probably left out. check that!
 
-            while(diff[i+emptyCellPairCounter] == 1):  # if there are more than one empty cells in a row, increase the counter
+            if(j == 1):  # that means, that there are more than one empty cells next to each other
+                emptyCellPairCounter += 1
 
-                emptyCellPairCounter = emptyCellPairCounter + 1
+                #while(diff[i+emptyCellPairCounter] == 1):  # if there are more than one empty cells in a row, increase the counter
 
-            # interp1d is piecewise linear
-            LinInt = __interp1d__([vals_index[k] for k in [i, i+emptyCellPairCounter]], [means[l] for l in [i-1, i]])  # linear interpolation between the known values
-            for k in emptyCells[i:i+emptyCellPairCounter+1]:
-                means.insert(k, LinInt(vals_index[k]))
-                uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]]))
+                #    emptyCellPairCounter = emptyCellPairCounter + 1
 
-        else:
-            LinInt = __interp1d__([vals_index[k] for k in [i, i+1]], [means[l] for l in [i-1, i]])
-            means.insert(i, LintInt(vals_index[i]))
-            uncerts.insert(i, __np__.mean([uncerts[l] for l in [k-1, k]]))
+                # interp1d is piecewise linear
+                #LinInt = __interp1d__([vals_index[k] for k in [i, i+emptyCellPairCounter+1]], [means[l] for l in [i-1, i]])  # linear interpolation between the known values
+                #for k in emptyCells[i:i+emptyCellPairCounter+1]:
+                #    means.insert(k, LinInt(vals_index[k]))
+                #    uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]]))
+
+            else:
+                LinInt = __interp1d__([vals_index[k] for k in [emptyCells[i-emptyCellPairCounter]-1, emptyCells[i]+1]], [means[l] for l in [i-emptyCellPairCounter-1, i-emptyCellPairCounter]])
+                for k in emptyCells[i-emptyCellPairCounter:i+1]:
+                    means.insert(k, LinInt(vals_index[k]))
+                    uncerts.insert(k, __np__.mean([uncerts[l] for l in [k-1, k]]))
+                emptyCellPairCounter = 0  # reset the counter
+
     # sanity checks:
-    if(len(means) != len(value_index)):
+    if(len(means) != len(vals_index)):
         raise ShapeMismatchError("Number of mean values and value indices is not the same!")
+
+    # TODO: code cleanup, like packing multiple code lines in a function
+    # TODO: try and see if numpy operations are faster than list operations
+    # TODO: add more print statements to see what happens
+    # TODO: add more comments
+    # TODO: more sanity checks to see if the data output actually is, what is wanted and not just garboge
 
     gridded_data = __np__.array([vals_index, means, uncerts])
 

@@ -69,6 +69,38 @@ def coordinate_trafo(r_star, theta_star, phi_star, plan_loc_x=params['planet_loc
     return r_plan, theta_plan, phi_plan
 
 
+def cartesian_coord_planet(r_star, theta_star, phi_star, plan_loc_x=params['planet_location_x']):
+    """
+    This function calculates the cartesian coordinates of the planet's data from the given spherical coordinates
+    of the star.
+
+    returns x_plan, y_plan, z_plan
+    """
+    # computing the cartesian coordinates in the star coordinate system
+    x_star = []
+    y_star = []
+    z_star = []
+
+    # creating the matching value pairs
+    for i in r_star:
+        for j in theta_star:
+            for k in phi_star:
+                x_star.append(i*__np__.sin(j)*__np__.cos(k))
+                y_star.append(i*__np__.sin(j)*__np__.sin(k))
+                z_star.append(i*__np__.cos(j))
+
+    x_star = __np__.array(x_star)
+    y_star = __np__.array(y_star)
+    z_star = __np__.array(z_star)
+
+    # cartesian coordinates in the planet coordinate system
+    x_plan = x_star - plan_loc_x
+    y_plan = y_star
+    z_plan = z_star
+
+    return x_plan, y_plan, z_plan
+
+
 def velocity_trafo(vr_star, vtheta_star, vphi_star, r_star, theta_star, phi_star, r_plan, theta_plan, phi_plan):
     """
     This function transforms the given arrays of the velocity-vector-components in the star-centered-coordinate-system
@@ -111,15 +143,61 @@ def velocity_trafo(vr_star, vtheta_star, vphi_star, r_star, theta_star, phi_star
     return vr_plan, vtheta_plan, vphi_plan
 
 
-def extract_shell(vr, vtheta, vphi, r_pl, shell=params['r_hill'], delta=params['delta'], box=params['box']):
+def velocity_trafo_sph2car(r_star, theta_star, phi_star, vr_star, vtheta_star, vphi_star):
+    """
+    This function transforms the velocity-vector-components in the spherical coordinate system of the
+    star to the planets cartesion coordinate system.
+
+    returns: vx_plan, vy_plan, vz_plan
+    """
+    # computation of the velocity-vector-components
+    coords = []
+    for i in r_star:
+        for j in theta_star:
+            for k in phi_star:
+                coords.append([i,j,k])
+
+    coords = __np__.array(coords).T  # first entry are radii, second theta, third phi
+    r_star, theta_star, phi_star = coords
+
+    x_dot_star = (vr_star*__np__.sin(theta_star)*__np__.cos(phi_star) +
+                  vtheta_star*__np__.cos(theta_star)*__np__.cos(phi_star) -
+                  vphi_star*__np__.sin(phi_star))
+
+    y_dot_star = (vr_star*__np__.sin(theta_star)*__np__.sin(phi_star) +
+                  vtheta_star*__np__.cos(theta_star)*__np__.sin(phi_star) +
+                  vphi_star*__np__.cos(phi_star))
+
+    z_dot_star = vr_star*__np__.cos(theta_star) - vtheta_star*__np__.sin(theta_star)
+
+    return x_dot_star, y_dot_star, z_dot_star
+
+
+class LengthMismatchError(Exception):
+    def __init__(self, msg):
+        self.message = msg
+
+
+def extract_shell(vr, vtheta, vphi, r_pl, shell=params['r_hill'], delta=[params['delta']], box=params['box']):
     """
     This function takes the values of vr, vtheta, vphi and extracts the velocity vectors who reside
-    in the given shell +/- delta*box
+    in the given shell  r_hill +/- delta*box
 
     returns: vr, vtheta, vphi (extracted)
     """
+    if(len(delta) == 1):
+        delta_inner = delta[0]
+        delta_outer = delta[0]
+    elif(len(delta) == 2):
+        delta_inner = delta[0]
+        delta_outer = delta[1]
+    elif(len(delta) == 0):
+        raise LengthMismatchError("No value for Delta.")
+    elif(len(delta) > 2):
+        raise LengthMismatchError("Too many values for Delta")
+
     # NOTE: find a good value for delta, so that the plots are looking nice
-    indices = [i for i,j in enumerate(r_pl) if ((shell + delta*box) > j > (shell- delta*box))]
+    indices = [i for i,j in enumerate(r_pl) if ((shell + delta_outer*box) > j > (shell- delta_inner*box))]
     print('\n:: Shell Extractor:\n:: Number of Values in shell:', len(indices), '\n')
 
     return __np__.array([vr[indices], vtheta[indices], vphi[indices]]), indices
@@ -144,7 +222,8 @@ def hammer_projection(theta, phi):
     return x,y
 
 
-def contour_plot_velocity(x, y, vr, num_levels=15, levels=[], colorbar=True, figsize=(12,9)):
+def contour_plot_velocity(x, y, vr, num_levels=15, levels=[], vmax=None, vmin=None, colorbar=True, cb_label='', figsize=(12,9),
+                            cm=None):
     """
     This function takes the values of x (phi) and y (theta) (for example from the hammer projection) and
     plots a contour plot of the given values for vr. This is done by a weighted 2D Histogram. The
@@ -159,24 +238,37 @@ def contour_plot_velocity(x, y, vr, num_levels=15, levels=[], colorbar=True, fig
     zg = __mlab__.griddata(x, y, vr, xg, yg, 'linear')  # interpolate the z-data (vr)
 
     # Plotting Section
-    color_map = __plt__.cm.seismic
+    if(not cm):
+        color_map = __plt__.cm.seismic
+    else:
+        color_map = cm
     fig = __plt__.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
     # Contour Plot
+    if(not vmax):
+        vmax=abs(zg).max()
+
+    if(not vmin):
+        vmin=-abs(zg).max()
+
     if(len(levels)):
         # if levels are given, use them
-        con = ax.contourf(xg, yg, zg, levels, cmap=color_map, vmax=abs(zg).max(), vmin=-abs(zg).max())
+        con = ax.contourf(xg, yg, zg, levels, cmap=color_map, vmax=vmax, vmin=vmin)
     else:
         # if no levels are given, use num_levels. levels are chosen automatically.
-        con = ax.contourf(xg, yg, zg, num_levels, cmap=color_map, vmax=abs(zg).max(), vmin=-abs(zg).max())
+        con = ax.contourf(xg, yg, zg, num_levels, cmap=color_map, vmax=vmax, vmin=vmin)
 
     # Color Bar
     cax = fig.add_axes([0.8, 0.25, 0.025, 0.5])  # creating a new axis for the colorbar
+    #    cb = __plt__.colorbar(mappable=con, cax=cax, orientation='vertical', boundaries=levels)
     cb = __plt__.colorbar(mappable=con, cax=cax, orientation='vertical')
     cb.formatter.set_powerlimits((0,0))  # setting the scientific notation of the color bar ticks
     cb.update_ticks()
-    cb.set_label('$v_R$', rotation='horizontal')
+    if(len(cb_label)):
+        cb.set_label(cb_label, rotation='horizontal')
+    else:
+        cb.set_label('$v_R$', rotation='horizontal')
 
     return fig, ax, cax
 
@@ -213,9 +305,6 @@ def scatter_contour(x, quantity, x_norm=params['r0_planet'], nbins=80, num_level
 
     # Dot Plot
     ax.plot(x, quantity, 'g.', alpha=0.3, zorder=0, markeredgewidth=0.0)
-    if(xlog):
-        ax.set_xscale('log')
-    else: ax.set_xscale('linear')
 
     # Contour Plot
     if(len(levels)):
@@ -231,5 +320,10 @@ def scatter_contour(x, quantity, x_norm=params['r0_planet'], nbins=80, num_level
     cb.formatter.set_powerlimits((0,0))  # setting the scientific notation of the color bar ticks
     cb.update_ticks()
     cb.set_label('$Dot\ Density$')
+
+    # scaling
+    if(xlog):
+        ax.set_xscale('log')
+    else: ax.set_xscale('linear')
 
     return fig, ax, cax

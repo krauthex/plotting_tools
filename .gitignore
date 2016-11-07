@@ -7,3 +7,4 @@ data
 *.png
 todo.txt
 hist.txt
+.ipynb_checkpoints
