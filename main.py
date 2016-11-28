@@ -285,14 +285,14 @@ def scatter_contour(x, quantity, x_norm=params['r0_planet'], nbins=80, num_level
     x = x/x_norm
 
     # depending on xlog, computing the 2d histogram
-    if(xlog):
-        H, xedges, yedges = __np__.histogram2d(__np__.log(x), quantity, bins=nbins)
-        xcenter = __np__.exp((xedges[:-1] + xedges[1:]) / 2)
-        ycenter = (yedges[:-1] + yedges[1:]) / 2
-    else:
-        H, xedges, yedges = __np__.histogram2d(x, quantity, bins=nbins)
-        xcenter = (xedges[:-1] + xedges[1:]) / 2
-        ycenter = (yedges[:-1] + yedges[1:]) / 2
+    #if(xlog):
+    #    H, xedges, yedges = __np__.histogram2d(__np__.log(x), quantity, bins=nbins)
+    #    xcenter = __np__.exp((xedges[:-1] + xedges[1:]) / 2)
+    #    ycenter = (yedges[:-1] + yedges[1:]) / 2
+    #else:
+    H, xedges, yedges = __np__.histogram2d(x, quantity, bins=nbins)
+    xcenter = (xedges[:-1] + xedges[1:]) / 2
+    ycenter = (yedges[:-1] + yedges[1:]) / 2
 
     # the histogram has to be flipped and rotated
     H = __np__.rot90(H)
